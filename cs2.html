@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Producer-Consumer Manual Simulator</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+      padding: 2rem;
+      color: #333;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2.5rem;
+      color: #333;
+      text-shadow: 1px 1px 2px rgba(255,255,255,0.6);
+    }
+
+    label {
+      font-weight: bold;
+      margin-right: 0.5rem;
+    }
+
+    input, button {
+      padding: 0.6rem 0.8rem;
+      margin: 0.3rem;
+      border-radius: 8px;
+      border: none;
+      font-size: 1rem;
+    }
+
+    button {
+      background: #ff6b6b;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #ff4b4b;
+    }
+
+    .controls {
+      margin-top: 1rem;
+    }
+
+    .visualizer {
+      margin-top: 2rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 5px;
+      border: 3px solid #fff;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 12px;
+      overflow-x: auto;
+    }
+
+    .visualizer > div {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .process-block {
+      width: 100px;
+      height: 60px;
+      color: white;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      opacity: 0;
+      transform: translateY(-30px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    .process-block.visible {
+      opacity: 1;
+      transform: translateY(0);
+      animation: pop 0.3s ease;
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.5); }
+      100% { transform: scale(1); }
+    }
+
+    .results {
+      margin-top: 2rem;
+      background: #fff;
+      padding: 1.2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+      font-size: 1rem;
+      overflow-x: auto;
+    }
+
+    pre {
+      background: #111;
+      color: #0f0;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 14px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Producer-Consumer Simulator</h1>
+
+<label>Buffer Size:</label>
+<input type="number" id="bufferSizeInput" value="3" min="1" style="width: 60px;">
+<button onclick="resetSimulation()">Reset</button>
+
+<div class="controls">
+  <button onclick="produce()">Produce</button>
+  <button onclick="consume()">Consume</button>
+</div>
+
+<div class="visualizer" id="visualizer"></div>
+<div class="results" id="results"></div>
+
+<script>
+let buffer = [];
+let bufferSize = 3;
+let mutex = 1, full = 0, empty = 3, x = 0;
+let timeline = [];
+let actions = [];
+
+function wait(s) { return --s; }
+function signal(s) { return ++s; }
+
+function resetSimulation() {
+  bufferSize = parseInt(document.getElementById("bufferSizeInput").value);
+  buffer = [];
+  mutex = 1;
+  full = 0;
+  empty = bufferSize;
+  x = 0;
+  timeline = [];
+  actions = [];
+
+  document.getElementById("visualizer").innerHTML = '';
+  document.getElementById("results").innerHTML = '';
+}
+
+function updateResults() {
+  document.getElementById("results").innerHTML = `
+    <strong>Buffer Status:</strong> ${buffer.join(', ') || 'Empty'}<br>
+    <strong>Actions Log:</strong>
+    <pre>${actions.slice(-10).join('\n')}</pre>
+  `;
+}
+
+async function animateBlock(label, color) {
+  const visualizer = document.getElementById("visualizer");
+
+  const div = document.createElement("div");
+  div.className = "process-block visible";
+  div.innerText = label;
+  div.style.backgroundColor = color;
+
+  const timeLabel = document.createElement("span");
+  timeLabel.style.fontSize = "12px";
+  timeLabel.style.marginTop = "4px";
+  timeLabel.innerText = timeline.length;
+
+  const container = document.createElement("div");
+  container.style.display = "flex";
+  container.style.flexDirection = "column";
+  container.style.alignItems = "center";
+  container.appendChild(div);
+  container.appendChild(timeLabel);
+
+  visualizer.appendChild(container);
+  visualizer.scrollLeft = visualizer.scrollWidth;
+
+  timeline.push(label);
+  await new Promise(r => setTimeout(r, 300));
+}
+
+async function produce() {
+  if (mutex === 1 && empty !== 0) {
+    mutex = wait(mutex);
+    full = signal(full);
+    empty = wait(empty);
+    x++;
+    const item = `Item${x}`;
+    buffer.push(item);
+    actions.push(`✅ Producer produced ${item}`);
+    await animateBlock("Produced", "#4CAF50");
+    mutex = signal(mutex);
+  } else {
+    actions.push("❌ Producer failed: BUFFER FULL");
+    await animateBlock("FULL", "gray");
+  }
+  updateResults();
+}
+
+async function consume() {
+  if (mutex === 1 && full !== 0) {
+    mutex = wait(mutex);
+    full = wait(full);
+    empty = signal(empty);
+    const item = buffer.pop();
+    actions.push(`🗑️ Consumer consumed ${item}`);
+    x--;
+    await animateBlock("Consumed", "#2196F3");
+    mutex = signal(mutex);
+  } else {
+    actions.push("❌ Consumer failed: BUFFER EMPTY");
+    await animateBlock("EMPTY", "gray");
+  }
+  updateResults();
+}
+
+resetSimulation(); // Initialize on load
+</script>
+
+</body>
+</html>
